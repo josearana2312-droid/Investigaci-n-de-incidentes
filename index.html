@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clasificador de Eventos No Deseados</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#C8102E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800;900&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: banda negra superior, asistente de una pregunta a la vez con su recorrido al lado; en celular todo en una columna. */
+:root {
+  --bg: #f7f5f5;
+  --surface: #ffffff;
+  --ink: #141112;
+  --muted: #5d5557;
+  --line: #e4dcdd;
+  --red: #c8102e;
+  --red-ink: #a50d26;
+  --red-soft: #fbe9ec;
+  --band: #0f0d0e;
+  --band-fg: #ffffff;
+  --no-bg: #141112;
+  --no-fg: #ffffff;
+  --display: "Archivo", "Arial Narrow", Arial, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131011; --surface: #1d191a; --ink: #f4eff0; --muted: #b3a9ab; --line: #352e30;
+    --red: #e3304b; --red-ink: #ff6b80; --red-soft: #3a1820; --band: #000000; --band-fg: #ffffff;
+    --no-bg: #f4eff0; --no-fg: #141112; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131011; --surface: #1d191a; --ink: #f4eff0; --muted: #b3a9ab; --line: #352e30;
+  --red: #e3304b; --red-ink: #ff6b80; --red-soft: #3a1820; --band: #000000; --band-fg: #ffffff;
+  --no-bg: #f4eff0; --no-fg: #141112; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--band); }
+.wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+header.band { background: var(--band); color: var(--band-fg); border-bottom: 4px solid var(--red); }
+header.band .wrap { display: flex; align-items: center; gap: 12px; padding-block: 14px; }
+.mark { width: 38px; height: 38px; flex: none; }
+.brand { display: flex; flex-direction: column; line-height: 1.15; }
+.brand b { font-family: var(--display); font-weight: 800; font-size: 1.1rem; letter-spacing: .01em; }
+.brand span { font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; opacity: .75; }
+
+.hero .wrap { padding-block: 28px 8px; }
+.eyebrow { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--red-ink); }
+h1 { font-family: var(--display); font-weight: 900; font-size: clamp(1.7rem, 4.6vw, 2.6rem); line-height: 1.08; margin: 6px 0 8px; text-wrap: balance; letter-spacing: -.01em; }
+.hero p { margin: 0; color: var(--muted); max-width: 62ch; }
+
+main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; padding-block: 20px 36px; align-items: start; }
+@media (max-width: 820px) { main .wrap { grid-template-columns: minmax(0, 1fr); } }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.stage { padding: 22px; min-width: 0; }
+@media (min-width: 600px) { .stage { padding: 30px; } }
+
+.progress { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.progress .step { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); white-space: nowrap; }
+.bar { flex: 1; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--red); border-radius: 99px; transition: width .3s ease; }
+
+.node-tag { display: inline-block; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; padding: 4px 10px; border-radius: 99px; background: var(--red-soft); color: var(--red-ink); margin-bottom: 12px; }
+.question { font-family: var(--display); font-weight: 800; font-size: clamp(1.35rem, 3.6vw, 1.9rem); line-height: 1.18; margin: 0 0 10px; text-wrap: balance; }
+.help { color: var(--muted); margin: 0 0 18px; max-width: 62ch; }
+.callout { display: flex; gap: 12px; align-items: flex-start; border: 1.5px solid var(--red); background: var(--red-soft); border-radius: 8px; padding: 12px 14px; margin: 0 0 18px; }
+.callout svg { flex: none; margin-top: 2px; }
+.callout p { margin: 0; font-size: .95rem; }
+.callout b { color: var(--red-ink); }
+
+.answers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; }
+.btn-ans { appearance: none; border: 0; border-radius: 10px; padding: 18px 12px; font-family: var(--display); font-weight: 900; font-size: 1.5rem; letter-spacing: .04em; cursor: pointer; transition: transform .08s ease, filter .15s ease; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.btn-ans small { font-family: var(--body); font-weight: 500; font-size: .78rem; letter-spacing: 0; opacity: .85; }
+.btn-ans:hover { filter: brightness(1.08); }
+.btn-ans:active { transform: scale(.98); }
+.btn-ans:focus-visible, .btn:focus-visible, summary:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
+.yes { background: var(--red); color: #fff; }
+.no { background: var(--no-bg); color: var(--no-fg); }
+
+.nav { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.btn { appearance: none; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); border-radius: 8px; padding: 9px 14px; font: 600 .9rem var(--body); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { background: var(--ink); color: var(--surface); }
+.btn[disabled] { opacity: .35; pointer-events: none; }
+.btn.primary { background: var(--red); border-color: var(--red); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); background: var(--red); color: #fff; }
+
+/* Resultado */
+.result-head { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 8px; }
+.verdict { border-radius: 10px; padding: 20px 20px 18px; color: #fff; background: var(--band); border-left: 10px solid var(--red); }
+.verdict.hot { background: var(--red); border-left-color: var(--band); }
+.verdict .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .14em; opacity: .85; font-weight: 600; }
+.verdict .name { font-family: var(--display); font-weight: 900; font-size: clamp(1.6rem, 5vw, 2.3rem); line-height: 1.05; margin: 4px 0 0; text-transform: uppercase; text-wrap: balance; }
+.verdict .orig { margin: 10px 0 0; font-size: .95rem; }
+.verdict .orig b { font-weight: 700; text-transform: uppercase; }
+.def { margin: 16px 0 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; }
+.def h3 { margin: 0 0 4px; font-family: var(--display); font-size: 1rem; font-weight: 800; }
+.def p { margin: 0; color: var(--muted); font-size: .94rem; }
+.def + .def { margin-top: 10px; }
+.note { font-size: .85rem; color: var(--muted); margin: 14px 0 0; }
+
+/* Recorrido */
+aside { padding: 18px; min-width: 0; }
+aside h2 { font-family: var(--display); font-size: 1rem; font-weight: 800; margin: 0 0 4px; }
+aside .sub { margin: 0 0 12px; font-size: .85rem; color: var(--muted); }
+ol.trail { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+ol.trail li { position: relative; padding: 0 0 14px 26px; font-size: .9rem; }
+ol.trail li::before { content: ""; position: absolute; left: 6px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+ol.trail li::after { content: ""; position: absolute; left: 10px; top: 18px; bottom: 0; width: 2px; background: var(--line); }
+ol.trail li:last-child::after { display: none; }
+ol.trail li.current::before { background: var(--red); box-shadow: 0 0 0 4px var(--red-soft); }
+.chip { display: inline-block; font-size: .7rem; font-weight: 800; letter-spacing: .06em; padding: 1px 8px; border-radius: 99px; margin-left: 4px; vertical-align: 1px; }
+.chip.y { background: var(--red); color: #fff; }
+.chip.n { background: var(--no-bg); color: var(--no-fg); }
+ol.trail .q { color: var(--ink); }
+ol.trail .r { display: block; font-weight: 700; color: var(--red-ink); text-transform: uppercase; font-size: .82rem; letter-spacing: .04em; }
+.empty { font-size: .88rem; color: var(--muted); }
+
+/* Secciones de referencia */
+.ref .wrap { padding-block: 0 36px; display: grid; gap: 14px; }
+details.card { padding: 0; }
+details summary { cursor: pointer; padding: 16px 18px; font-family: var(--display); font-weight: 800; font-size: 1.05rem; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+details summary::-webkit-details-marker { display: none; }
+details summary::after { content: "+"; font-size: 1.4rem; color: var(--red); line-height: 1; }
+details[open] summary::after { content: "–"; }
+details .inner { padding: 0 18px 18px; }
+.flow-img { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.flow-img img { display: block; width: 100%; min-width: 640px; max-width: none; height: auto; }
+.gloss { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.gloss div { border-top: 3px solid var(--red); padding: 10px 2px 0; }
+.gloss h3 { margin: 0 0 4px; font-family: var(--display); font-size: .98rem; font-weight: 800; }
+.gloss p { margin: 0; font-size: .9rem; color: var(--muted); }
+.src { font-size: .8rem; color: var(--muted); margin: 12px 0 0; }
+
+footer { background: var(--band); color: var(--band-fg); }
+footer .wrap { padding-block: 18px; display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; font-size: .8rem; opacity: .85; }
+
+.fade { animation: fade .25s ease; }
+@keyframes fade { from { opacity: .4; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .fade { animation: none; } .bar i { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="band">
+  <div class="wrap">
+    <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
+      <path d="M20 2 35 8v11c0 9.5-6.4 16.4-15 19C11.4 35.4 5 28.5 5 19V8z" fill="#C8102E"/>
+      <path d="M20 10v13" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="20" cy="29" r="2.6" fill="#fff"/>
+    </svg>
+    <div class="brand"><b>Clasificador SST</b><span>Seguridad y Salud en el Trabajo</span></div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Flujograma de clasificación</div>
+    <h1>Clasificación de Eventos No Deseados</h1>
+    <p>Responda SÍ o NO a cada pregunta. Al final verá cómo se clasifica el evento según el flujograma, y si corresponde reportarlo como evento de alto potencial.</p>
+  </div>
+</section>
+
+<main>
+  <div class="wrap">
+    <section class="card stage" id="stage" aria-live="polite"></section>
+    <aside class="card" aria-label="Su recorrido">
+      <h2>Su recorrido</h2>
+      <p class="sub">Cada respuesta queda registrada aquí.</p>
+      <ol class="trail" id="trail"></ol>
+    </aside>
+  </div>
+</main>
+
+<section class="ref">
+  <div class="wrap">
+    <details class="card">
+      <summary>Ver el flujograma completo</summary>
+      <div class="inner">
+        <div class="flow-img"><img src="flujograma.png" alt="Flujograma de clasificación de eventos no deseados" loading="lazy"></div>
+      </div>
+    </details>
+    <details class="card">
+      <summary>Definiciones</summary>
+      <div class="inner">
+        <div class="gloss">
+          <div><h3>Incidente</h3><p>Suceso ocurrido en el curso del trabajo o en relación con él, en el que la persona no sufre lesiones corporales o solo requiere primeros auxilios.</p></div>
+          <div><h3>Incidente peligroso</h3><p>Suceso potencialmente riesgoso que pudiera causar lesiones o enfermedades graves a las personas en su trabajo o a la población.</p></div>
+          <div><h3>Accidente leve</h3><p>Lesión que, tras la evaluación médica, genera un descanso breve con retorno, como máximo, al día siguiente a sus labores habituales.</p></div>
+          <div><h3>Accidente incapacitante</h3><p>Lesión que, tras la evaluación médica, da lugar a descanso, ausencia justificada al trabajo y tratamiento.</p></div>
+          <div><h3>Accidente mortal</h3><p>Suceso cuyas lesiones producen la muerte del trabajador.</p></div>
+          <div><h3>Evento de alto potencial</h3><p>Evento que, en circunstancias ligeramente distintas, pudo causar un daño significativo o la muerte. Se reporta así además de su clasificación original.</p></div>
+        </div>
+        <p class="src">Definiciones resumidas del glosario del D.S. N.° 005-2012-TR, Reglamento de la Ley N.° 29783 de Seguridad y Salud en el Trabajo.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Herramienta de apoyo. La clasificación final la valida el área de SST.</span>
+    <span>Basado en el flujograma de clasificación de eventos no deseados</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var NODES = {
+    lesion: {
+      tag: "Inicio", q: "¿Existe lesión?",
+      help: "Indique si alguna persona sufrió una lesión corporal a causa del evento.",
+      yes: "descanso", no: "mortal"
+    },
+    mortal: {
+      tag: "Incidente", q: "¿El incidente tuvo el potencial de ocasionar un accidente mortal?",
+      help: "Como no hubo lesión, el evento es un INCIDENTE. Ahora evalúe si pudo haber causado la muerte de alguna persona.",
+      yes: "shia", no: { alto: "incidente" }
+    },
+    shia: {
+      tag: "Revisión SHIA/SHIC", q: "¿SHIA/SHIC determinó que el incidente tuvo potencial de muerte?",
+      callout: "<b>Acción requerida:</b> coordine con SHIA/SHIC para revisar la clasificación antes de responder.",
+      help: "Responda según lo que concluyó la revisión con SHIA/SHIC.",
+      yes: { final: "peligroso" }, no: { alto: "incidente" }
+    },
+    descanso: {
+      tag: "Lesión", q: "¿La lesión genera un descanso médico?",
+      help: "Considere el descanso médico indicado por el profesional de salud.",
+      yes: "horas", no: { alto: "primeros" }
+    },
+    horas: {
+      tag: "Descanso médico", q: "¿El descanso médico es mayor a 24 horas?",
+      help: "Si el trabajador retorna a sus labores, como máximo, al día siguiente, responda NO.",
+      yes: "deceso", no: { alto: "leve" }
+    },
+    deceso: {
+      tag: "Accidente incapacitante", q: "¿Las lesiones produjeron el deceso del trabajador?",
+      help: "Con un descanso mayor a 24 horas, el evento es un ACCIDENTE INCAPACITANTE, salvo que las lesiones hayan causado la muerte.",
+      yes: { final: "mortal" }, no: { alto: "incapacitante" }
+    },
+    alto: {
+      tag: "Potencial", q: "¿Tuvo potencial de daño significativo o muerte?",
+      help: "Evalúe si, en circunstancias ligeramente distintas, el evento pudo causar un daño significativo o la muerte."
+    }
+  };
+
+  var CLASS = {
+    incidente: { name: "Incidente", def: "Suceso en el que la persona no sufre lesiones corporales, o solo requiere primeros auxilios." },
+    peligroso: { name: "Incidente peligroso", def: "Suceso potencialmente riesgoso que pudiera causar lesiones o enfermedades graves. SHIA/SHIC confirmó su potencial de muerte." },
+    primeros: { name: "Incidente con primeros auxilios (*)", def: "La lesión solo requirió atención de primeros auxilios y no generó descanso médico.", note: "(*) Según el D.S. N.° 005-2012-TR, un evento que solo requiere primeros auxilios se considera incidente." },
+    leve: { name: "Accidente leve", def: "Lesión que genera un descanso breve, con retorno, como máximo, al día siguiente a sus labores habituales." },
+    incapacitante: { name: "Accidente incapacitante", def: "Lesión que da lugar a descanso mayor a 24 horas, ausencia justificada al trabajo y tratamiento." },
+    mortal: { name: "Accidente mortal", def: "Suceso cuyas lesiones producen la muerte del trabajador." }
+  };
+
+  var stage = document.getElementById("stage");
+  var trail = document.getElementById("trail");
+  var history = []; // {node, answer, base}
+  var current = "lesion";
+  var pendingBase = null; // clasificación previa al nodo "alto"
+  var result = null;
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function remainingEstimate() {
+    // pasos máximos que faltan desde el nodo actual (para la barra)
+    var depth = { lesion: 5, mortal: 3, shia: 2, descanso: 4, horas: 3, deceso: 2, alto: 1 };
+    return depth[current] || 1;
+  }
+
+  function renderTrail() {
+    var html = "";
+    history.forEach(function (h) {
+      var n = NODES[h.node];
+      html += '<li><span class="q">' + esc(n.q) + '</span><span class="chip ' + (h.answer ? "y" : "n") + '">' + (h.answer ? "SÍ" : "NO") + "</span>";
+      if (h.reached) html += '<span class="r">→ ' + esc(h.reached) + "</span>";
+      html += "</li>";
+    });
+    if (result) {
+      html += '<li class="current"><span class="r">Resultado: ' + esc(result.title) + "</span></li>";
+    } else {
+      html += '<li class="current"><span class="q">' + esc(NODES[current].q) + "</span></li>";
+    }
+    trail.innerHTML = html;
+  }
+
+  function renderQuestion() {
+    var n = NODES[current];
+    var done = history.length;
+    var pct = Math.round((done / (done + remainingEstimate())) * 100);
+    var help = n.help;
+    if (current === "alto" && pendingBase) {
+      help = "Clasificación hasta aquí: <b>" + esc(CLASS[pendingBase].name.toUpperCase()) + "</b>. " + esc(n.help);
+    } else { help = esc(help); }
+    stage.innerHTML =
+      '<div class="fade">' +
+      '<div class="progress"><span class="step">Pregunta ' + (done + 1) + '</span><div class="bar" aria-hidden="true"><i style="width:' + pct + '%"></i></div></div>' +
+      '<span class="node-tag">' + esc(n.tag) + "</span>" +
+      '<h2 class="question" id="qtext">' + esc(n.q) + "</h2>" +
+      (n.callout ? '<div class="callout"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.5 19 18H1z" fill="var(--red)"/><path d="M10 7v5" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="14.8" r="1.2" fill="#fff"/></svg><p>' + n.callout + "</p></div>" : "") +
+      '<p class="help">' + help + "</p>" +
+      '<div class="answers" role="group" aria-labelledby="qtext">' +
+      '<button class="btn-ans yes" id="btn-si" type="button">SÍ</button>' +
+      '<button class="btn-ans no" id="btn-no" type="button">NO</button>' +
+      "</div>" +
+      '<div class="nav">' +
+      '<button class="btn" id="btn-back" type="button"' + (done ? "" : " disabled") + '>← Atrás</button>' +
+      '<button class="btn" id="btn-reset" type="button"' + (done ? "" : " disabled") + ">Reiniciar</button>" +
+      "</div></div>";
+    document.getElementById("btn-si").onclick = function () { answer(true); };
+    document.getElementById("btn-no").onclick = function () { answer(false); };
+    document.getElementById("btn-back").onclick = back;
+    document.getElementById("btn-reset").onclick = reset;
+    renderTrail();
+  }
+
+  function renderResult() {
+    var hot = result.alto || result.key === "peligroso" || result.key === "mortal";
+    var c = CLASS[result.key];
+    var html = '<div class="fade">' +
+      '<div class="progress"><span class="step">Resultado</span><div class="bar" aria-hidden="true"><i style="width:100%"></i></div></div>' +
+      '<p class="result-head">El evento se clasifica como</p>' +
+      '<div class="verdict' + (hot ? " hot" : "") + '">' +
+      '<div class="label">Clasificación</div>' +
+      '<p class="name">' + esc(result.title) + "</p>";
+    if (result.alto) html += '<p class="orig">Clasificación original: <b>' + esc(c.name) + "</b></p>";
+    else if (result.altoAsked) html += '<p class="orig">Mantiene la clasificación original.</p>';
+    html += "</div>";
+    if (result.alto) html += '<div class="def"><h3>Evento de alto potencial</h3><p>El evento pudo causar un daño significativo o la muerte. Se reporta como evento de alto potencial y conserva su clasificación original.</p></div>';
+    html += '<div class="def"><h3>' + esc(c.name) + "</h3><p>" + esc(c.def) + "</p></div>";
+    if (c.note) html += '<p class="note">' + esc(c.note) + "</p>";
+    html += '<div class="nav">' +
+      '<button class="btn primary" id="btn-new" type="button">Nueva clasificación</button>' +
+      '<button class="btn" id="btn-back" type="button">← Cambiar última respuesta</button>' +
+      '<button class="btn" id="btn-copy" type="button">Copiar resultado</button>' +
+      "</div></div>";
+    stage.innerHTML = html;
+    document.getElementById("btn-new").onclick = reset;
+    document.getElementById("btn-back").onclick = back;
+    document.getElementById("btn-copy").onclick = copyResult;
+    renderTrail();
+  }
+
+  function render() { if (result) renderResult(); else renderQuestion(); }
+
+  function answer(yes) {
+    var n = NODES[current];
+    var entry = { node: current, answer: yes, prevBase: pendingBase };
+    if (current === "alto") {
+      result = { key: pendingBase, alto: yes, altoAsked: true, title: yes ? "Evento de alto potencial" : CLASS[pendingBase].name };
+      history.push(entry);
+      render(); focusStage(); return;
+    }
+    var next = yes ? n.yes : n.no;
+    if (typeof next === "string") {
+      if (current === "lesion" && !yes) entry.reached = "Incidente";
+      current = next;
+    } else if (next.final) {
+      result = { key: next.final, alto: false, altoAsked: false, title: CLASS[next.final].name };
+    } else if (next.alto) {
+      pendingBase = next.alto;
+      entry.reached = CLASS[next.alto].name;
+      current = "alto";
+    }
+    history.push(entry);
+    render(); focusStage();
+  }
+
+  function back() {
+    if (!history.length) return;
+    var last = history.pop();
+    current = last.node;
+    pendingBase = last.prevBase;
+    result = null;
+    render(); focusStage();
+  }
+
+  function reset() {
+    history = []; current = "lesion"; pendingBase = null; result = null;
+    render(); focusStage();
+  }
+
+  function focusStage() {
+    var q = stage.querySelector(".question, .verdict");
+    if (q && stage.getBoundingClientRect().top < 0) stage.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function summaryText() {
+    var lines = ["Clasificación del evento: " + result.title.toUpperCase()];
+    if (result.alto) lines.push("Clasificación original: " + CLASS[result.key].name.toUpperCase());
+    lines.push("", "Respuestas:");
+    history.forEach(function (h, i) { lines.push((i + 1) + ". " + NODES[h.node].q + " " + (h.answer ? "SÍ" : "NO")); });
+    return lines.join("\n");
+  }
+
+  function copyResult() {
+    var btn = document.getElementById("btn-copy");
+    var text = summaryText();
+    function ok() { btn.textContent = "Copiado"; setTimeout(function () { btn.textContent = "Copiar resultado"; }, 1800); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); ok(); } catch (e) { btn.textContent = "Seleccione y copie el texto"; }
+      document.body.removeChild(ta);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
